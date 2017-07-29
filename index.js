@@ -10,6 +10,8 @@ var states = {
 // local variable holding reference to the Alexa SDK object
 var alexa;
 
+var lastSpokenMessage = "";
+
 //OPTIONAL: replace with "amzn1.ask.skill.[your-unique-value-here]";
 var APP_ID = undefined; 
 
@@ -45,10 +47,10 @@ var scheduledEventMessage = "scheduled for this time frame. I've sent the detail
 var firstThreeMessage = "Here are the first %d. ";
 
 // the values within the {} are swapped out for variables
-var eventSummary = "The %s event is, %s at %s on %s ";
+var eventSummary = "The %s event is, %s on %s ";
 
 // Only used for the card on the companion app
-var cardContentSummary = "%s at %s on %s ";
+var cardContentSummary = "%s on %s ";
 
 // More info text
 var haveEventsRepromt = "Give me an event number to hear more information.";
@@ -81,6 +83,7 @@ var newSessionHandlers = {
     'LaunchRequest': function () {
         this.handler.state = states.SEARCHMODE;
         this.emit(':ask', skillName + " " + welcomeMessage, welcomeMessage);
+        lastSpokenMessage = skillName + " " + welcomeMessage;
     },
     "searchIntent": function() 
     {
@@ -89,6 +92,7 @@ var newSessionHandlers = {
     },
     'Unhandled': function () {
         this.emit(':ask', HelpMessage, HelpMessage);
+        lastSpokenMessage = HelpMessage;
     },
 };
 
@@ -97,14 +101,16 @@ var startSearchHandlers = Alexa.CreateStateHandler(states.SEARCHMODE, {
     'AMAZON.YesIntent': function () {
         output = welcomeMessage;
         alexa.emit(':ask', output, welcomeMessage);
+        lastSpokenMessage = output;
     },
 
     'AMAZON.NoIntent': function () {
         this.emit(':tell', shutdownMessage);
+        lastSpokenMessage = shutdownMessage;
     },
 
     'AMAZON.RepeatIntent': function () {
-        this.emit(':ask', output, HelpMessage);
+        this.emit(':ask', lastSpokenMessage, HelpMessage);
     },
 
     'searchIntent': function () {
@@ -123,11 +129,22 @@ var startSearchHandlers = Alexa.CreateStateHandler(states.SEARCHMODE, {
                         var ev = data[k];
                         // Pick out the data relevant to us and create an object to hold it.
                         var eventData = {
-                            summary: removeTags(ev.summary),
-                            location: removeTags(ev.location),
-                            description: removeTags(ev.description),
-                            start: ev.start
+                            
                         };
+
+                        if (ev.summary){
+                            eventData.summary = removeTags(ev.summary);
+                        }
+                        if (ev.location){
+                            eventData.location = removeTags(ev.location);
+                        }
+                        if (ev.description){
+                            eventData.description = removeTags(ev.description).toString().replace(/=/g, "").replace(/\n/g, " ").substring(0, removeTags(ev.description).replace(/=/g, "").replace(/\n/g, " ").indexOf("http:"));
+                        }
+                        if (ev.summary){
+                            eventData.start = removeTags(ev.start);
+                        }
+    
                         // add the newly created object to an array for use later.
                         eventList.push(eventData);
                     }
@@ -160,20 +177,20 @@ var startSearchHandlers = Alexa.CreateStateHandler(states.SEARCHMODE, {
 
                             if (relevantEvents[0] != null) {
                                 var date = new Date(relevantEvents[0].start);
-                                output += utils.format(eventSummary, "First", removeTags(relevantEvents[0].summary), relevantEvents[0].location, date.toDateString() + ".");
+                                output += utils.format(eventSummary, "First", removeTags(relevantEvents[0].summary), date.toDateString() + ".");
                             }
                             if (relevantEvents[1]) {
                                 var date = new Date(relevantEvents[1].start);
-                                output += utils.format(eventSummary, "Second", removeTags(relevantEvents[1].summary), relevantEvents[1].location, date.toDateString() + ".");
+                                output += utils.format(eventSummary, "Second", removeTags(relevantEvents[1].summary), date.toDateString() + ".");
                             }
                             if (relevantEvents[2]) {
                                 var date = new Date(relevantEvents[2].start);
-                                output += utils.format(eventSummary, "Third", removeTags(relevantEvents[2].summary), relevantEvents[2].location, date.toDateString() + ".");
+                                output += utils.format(eventSummary, "Third", removeTags(relevantEvents[2].summary), date.toDateString() + ".");
                             }
 
                             for (var i = 0; i < relevantEvents.length; i++) {
                                 var date = new Date(relevantEvents[i].start);
-                                cardContent += utils.format(cardContentSummary, removeTags(relevantEvents[i].summary), removeTags(relevantEvents[i].location), date.toDateString()+ "\n\n");
+                                cardContent += utils.format(cardContentSummary, removeTags(relevantEvents[i].summary), date.toDateString()+ "\n\n");
                             }
 
                             output += eventNumberMoreInfoText;
@@ -192,37 +209,46 @@ var startSearchHandlers = Alexa.CreateStateHandler(states.SEARCHMODE, {
                             }
 
                             alexa.emit(':askWithCard', output, haveEventsRepromt, cardTitle, cardContent);
+                            lastSpokenMessage = output;
                         } else {
                             output = NoDataMessage;
                             alexa.emit(':ask', output, output);
+                            lastSpokenMessage = output;
                         }
                     }
                     else {
                         output = NoDataMessage;
                         alexa.emit(':ask', output, output);
+                        lastSpokenMessage = output;
                     }
                 } else {
                     output = NoDataMessage;
                     alexa.emit(':ask', output, output);
+                    lastSpokenMessage = output;
                 }
             });
         }
         else{
             this.emit(":ask", "I'm sorry.  What day did you want me to look for events?", "I'm sorry.  What day did you want me to look for events?");
+        	lastSpokenMessage = "I'm sorry.  What day did you want me to look for events?";
         }
+        parent.handler.state = states.SEARCHMODE;
     },
 
     'AMAZON.HelpIntent': function () {
         output = HelpMessage;
         this.emit(':ask', output, output);
+        lastSpokenMessage = output;
     },
 
     'AMAZON.StopIntent': function () {
         this.emit(':tell', killSkillMessage);
+        lastSpokenMessage = killSkillMessage;
     },
 
     'AMAZON.CancelIntent': function () {
         this.emit(':tell', killSkillMessage);
+        lastSpokenMessage = killSkillMessage;
     },
 
     'SessionEndedRequest': function () {
@@ -231,6 +257,7 @@ var startSearchHandlers = Alexa.CreateStateHandler(states.SEARCHMODE, {
 
     'Unhandled': function () {
         this.emit(':ask', HelpMessage, HelpMessage);
+        lastSpokenMessage = HelpMessage;
     }
 });
 
@@ -240,42 +267,54 @@ var descriptionHandlers = Alexa.CreateStateHandler(states.DESCRIPTION, {
 
         var repromt = " Would you like to hear another event?";
         var slotValue = this.event.request.intent.slots.number.value;
-
         // parse slot value
         var index = parseInt(slotValue) - 1;
 
         if (relevantEvents[index]) {
 
             // use the slot value as an index to retrieve description from our relevant array
-            output = descriptionMessage + removeTags(relevantEvents[index].description);
+            output = descriptionMessage + (removeTags(relevantEvents[index].description) || "No further description was provided for this event.").toString().replace(/=/g, "");
 
             output += repromt;
 
             this.emit(':askWithCard', output, repromt, relevantEvents[index].summary, output);
+            lastSpokenMessage = output;
         } else {
             this.emit(':tell', eventOutOfRange);
+            lastSpokenMessage = eventOutOfRange;
         }
+        this.handler.state = states.SEARCHMODE;
     },
 
     'AMAZON.HelpIntent': function () {
         this.emit(':ask', descriptionStateHelpMessage, descriptionStateHelpMessage);
+        lastSpokenMessage = descriptionStateHelpMessage;
+        this.handler.state = states.SEARCHMODE;
     },
 
     'AMAZON.StopIntent': function () {
         this.emit(':tell', killSkillMessage);
+        lastSpokenMessage = killSkillMessage;
+        this.handler.state = states.SEARCHMODE;
     },
 
     'AMAZON.CancelIntent': function () {
         this.emit(':tell', killSkillMessage);
+        lastSpokenMessage = killSkillMessage;
+        this.handler.state = states.SEARCHMODE;
     },
 
     'AMAZON.NoIntent': function () {
         this.emit(':tell', shutdownMessage);
+        lastSpokenMessage = shutdownMessage;
+        this.handler.state = states.SEARCHMODE;
     },
 
     'AMAZON.YesIntent': function () {
         output = welcomeMessage;
         alexa.emit(':ask', eventNumberMoreInfoText, eventNumberMoreInfoText);
+        lastSpokenMessage = eventNumberMoreInfoText;
+        this.handler.state = states.SEARCHMODE;
     },
 
     'SessionEndedRequest': function () {
@@ -284,6 +323,7 @@ var descriptionHandlers = Alexa.CreateStateHandler(states.DESCRIPTION, {
 
     'Unhandled': function () {
         this.emit(':ask', HelpMessage, HelpMessage);
+        lastSpokenMessage = HelpMessage;
     }
 });
 
@@ -299,7 +339,7 @@ exports.handler = function (event, context, callback) {
 // Remove HTML tags from string
 function removeTags(str) {
     if (str) {
-        return str.replace(/<(?:.|\n)*?>/gm, '');
+        return str.toString().replace(/<(?:.|\n)*?>/gm, '');
     }
 }
 
@@ -399,7 +439,7 @@ function getEventsBeweenDates(startDate, endDate, eventList) {
     var data = new Array();
 
     for (var i = 0; i < eventList.length; i++) {
-        if (start <= eventList[i].start && end >= eventList[i].start) {
+        if (start <= Date.parse(eventList[i].start) && end >= Date.parse(eventList[i].start)) {
             data.push(eventList[i]);
         }
     }
